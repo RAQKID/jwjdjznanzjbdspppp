@@ -46,7 +46,7 @@ app.get("/welcome", async (req, res) => {
     const avatar = await loadImageFromUrl(user_avatar);
 
     // Prepare background
-    bg.cover(WIDTH, HEIGHT);
+    bg.resize(WIDTH, HEIGHT); // 🔹 replace .cover() with .resize()
     const base = new Jimp(WIDTH, HEIGHT, borderColor);
     base.composite(bg, 0, 0);
 
@@ -94,4 +94,4 @@ module.exports = app;
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
-                                         }
+}
