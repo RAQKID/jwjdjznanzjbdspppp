@@ -1,24 +1,41 @@
 const express = require("express");
 const axios = require("axios");
 
-// Setup Jimp with custom plugins & types
+// Jimp custom with all plugins
 const jimp = require("@jimp/custom");
 const jimpTypes = require("@jimp/types");
-const jimpPrint = require("@jimp/plugin-print");
-const jimpResize = require("@jimp/plugin-resize"); // 🔹 add resize plugin
+const jimpPlugins = require("@jimp/plugins"); // ✅ all plugins in one
 
 const Jimp = jimp({
   types: [jimpTypes],
-  plugins: [jimpPrint, jimpResize], // 🔹 include resize
+  plugins: [jimpPlugins],
 });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helper to fetch image from URL
+// Helper to load image from URL
 async function loadImageFromUrl(url) {
   const response = await axios.get(url, { responseType: "arraybuffer" });
   return await Jimp.read(Buffer.from(response.data));
+}
+
+// Wrap text for description
+function wrapText(text, maxCharsPerLine = 40) {
+  if (!text) return "";
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    if ((cur + " " + w).trim().length <= maxCharsPerLine) {
+      cur = (cur + " " + w).trim();
+    } else {
+      lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.join("\n");
 }
 
 app.get("/welcome", async (req, res) => {
@@ -29,13 +46,13 @@ app.get("/welcome", async (req, res) => {
       username = "Unknown User",
       server = "My Server",
       description = "Welcome!",
-      borderColor = "#ffffff",
+      borderColor = "#1E90FF",
     } = req.query;
 
     if (!background || !user_avatar) {
-      return res
-        .status(400)
-        .json({ error: "Missing required query params: background, user_avatar" });
+      return res.status(400).json({
+        error: "Missing required query params: background, user_avatar",
+      });
     }
 
     const WIDTH = 1200;
@@ -45,36 +62,71 @@ app.get("/welcome", async (req, res) => {
     const bg = await loadImageFromUrl(background);
     const avatar = await loadImageFromUrl(user_avatar);
 
-    // Prepare background
-    bg.resize(WIDTH, HEIGHT); // ✅ now works
-    const base = new Jimp(WIDTH, HEIGHT, borderColor);
+    // Resize background to fit canvas
+    bg.resize(WIDTH, HEIGHT); // works with @jimp/plugins
+
+    // Base canvas
+    const base = new Jimp(WIDTH, HEIGHT);
     base.composite(bg, 0, 0);
 
-    // Circle avatar
-    avatar.resize(256, 256);
-    const mask = new Jimp(256, 256, 0x00000000);
-    mask.circle();
+    // Overlay for readability
+    const overlay = new Jimp(WIDTH, HEIGHT, 0x00000080);
+    base.composite(overlay, 0, 0);
+
+    // Avatar circle
+    const AV_SIZE = 260;
+    avatar.cover(AV_SIZE, AV_SIZE);
+    const mask = new Jimp(AV_SIZE, AV_SIZE, 0x00000000);
+    mask.circle(); // ✅ works with @jimp/plugins
     avatar.mask(mask, 0, 0);
 
-    // Place avatar
-    const avatarX = 50;
-    const avatarY = HEIGHT / 2 - 128;
+    // Avatar border
+    const border = new Jimp(AV_SIZE + 12, AV_SIZE + 12, 0x00000000);
+    const bSize = AV_SIZE + 12;
+    const bcx = bSize / 2;
+    const bcy = bSize / 2;
+    const br = bSize / 2;
+    const borderHex = Jimp.cssColorToHex(borderColor);
+
+    for (let y = 0; y < bSize; y++) {
+      for (let x = 0; x < bSize; x++) {
+        const dx = x - bcx;
+        const dy = y - bcy;
+        if (dx * dx + dy * dy <= br * br) {
+          border.setPixelColor(borderHex, x, y);
+        }
+      }
+    }
+
+    const avatarX = 60;
+    const avatarY = Math.round((HEIGHT - AV_SIZE) / 2);
+    base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatar, avatarX, avatarY);
 
     // Fonts
     const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
     const fontSub = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
+    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
 
-    const textX = avatarX + 300;
-    const serverY = 100;
-    const usernameY = serverY + 70;
-    const descY = usernameY + 50;
+    // Text positions
+    const textX = avatarX + AV_SIZE + 40;
+    const usernameY = avatarY + 10;
+    const serverY = usernameY + 80;
+    const descY = serverY + 56;
 
-    base.print(fontTitle, textX, serverY, server);
-    base.print(fontSub, textX, usernameY, username);
-    base.print(fontSmall, textX, descY, description);
+    // Username
+    let safeUsername = username.length > 28 ? username.slice(0, 25) + "..." : username;
+    base.print(fontTitle, textX, usernameY, safeUsername, WIDTH - textX - 60);
 
+    // Server name
+    let safeServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
+    base.print(fontSub, textX, serverY, `in ${safeServer}`, WIDTH - textX - 60);
+
+    // Description
+    const wrappedDesc = wrapText(description, 60);
+    base.print(fontSmall, textX, descY, wrappedDesc, WIDTH - textX - 100);
+
+    // Send PNG
     const buffer = await base.getBufferAsync(Jimp.MIME_PNG);
     res.set("Content-Type", "image/png");
     res.send(buffer);
@@ -90,7 +142,5 @@ app.get("/welcome", async (req, res) => {
 module.exports = app;
 
 if (require.main === module) {
-  app.listen(PORT, () =>
-    console.log(`✅ Server running on http://localhost:${PORT}`)
-  );
-  }
+  app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
+}
