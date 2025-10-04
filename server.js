@@ -5,10 +5,11 @@ const axios = require("axios");
 const jimp = require("@jimp/custom");
 const jimpTypes = require("@jimp/types");
 const jimpPrint = require("@jimp/plugin-print");
+const jimpResize = require("@jimp/plugin-resize"); // 🔹 add resize plugin
 
 const Jimp = jimp({
   types: [jimpTypes],
-  plugins: [jimpPrint],
+  plugins: [jimpPrint, jimpResize], // 🔹 include resize
 });
 
 const app = express();
@@ -37,7 +38,6 @@ app.get("/welcome", async (req, res) => {
         .json({ error: "Missing required query params: background, user_avatar" });
     }
 
-    // Canvas size
     const WIDTH = 1200;
     const HEIGHT = 450;
 
@@ -46,7 +46,7 @@ app.get("/welcome", async (req, res) => {
     const avatar = await loadImageFromUrl(user_avatar);
 
     // Prepare background
-    bg.resize(WIDTH, HEIGHT); // 🔹 replace .cover() with .resize()
+    bg.resize(WIDTH, HEIGHT); // ✅ now works
     const base = new Jimp(WIDTH, HEIGHT, borderColor);
     base.composite(bg, 0, 0);
 
@@ -56,7 +56,7 @@ app.get("/welcome", async (req, res) => {
     mask.circle();
     avatar.mask(mask, 0, 0);
 
-    // Place avatar with border
+    // Place avatar
     const avatarX = 50;
     const avatarY = HEIGHT / 2 - 128;
     base.composite(avatar, avatarX, avatarY);
@@ -66,18 +66,15 @@ app.get("/welcome", async (req, res) => {
     const fontSub = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
     const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
 
-    // Text positions
     const textX = avatarX + 300;
     const serverY = 100;
     const usernameY = serverY + 70;
     const descY = usernameY + 50;
 
-    // Draw text
     base.print(fontTitle, textX, serverY, server);
     base.print(fontSub, textX, usernameY, username);
     base.print(fontSmall, textX, descY, description);
 
-    // Output PNG
     const buffer = await base.getBufferAsync(Jimp.MIME_PNG);
     res.set("Content-Type", "image/png");
     res.send(buffer);
@@ -93,5 +90,7 @@ app.get("/welcome", async (req, res) => {
 module.exports = app;
 
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
-}
+  app.listen(PORT, () =>
+    console.log(`✅ Server running on http://localhost:${PORT}`)
+  );
+  }
