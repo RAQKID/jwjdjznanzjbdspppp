@@ -103,9 +103,9 @@ app.get('/welcome', async (req, res) => {
     base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatarImage, avatarX, avatarY);
 
-    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
-    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
 
     const textX = avatarX + AV_SIZE + 40;
     const usernameY = avatarY + 10;
