@@ -98,11 +98,10 @@ app.get("/welcome", async (req, res) => {
     base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatar, avatarX, avatarY);
 
-    // ✅ Load fonts from jimp (not from @jimp/plugin-print)
-    const fontTitle = await JimpFonts.loadFont(JimpFonts.FONT_SANS_64_WHITE);
-    const fontSub = await JimpFonts.loadFont(JimpFonts.FONT_SANS_32_WHITE);
-    const fontSmall = await JimpFonts.loadFont(JimpFonts.FONT_SANS_32_WHITE);
-
+    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+    
     const textX = avatarX + AV_SIZE + 40;
     const usernameY = avatarY + 10;
     const serverY = usernameY + 80;
