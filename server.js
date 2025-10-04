@@ -1,9 +1,13 @@
 const express = require("express");
 const axios = require("axios");
-const { createCanvas, loadImage } = require("canvas");
+const { createCanvas, loadImage, registerFont } = require("canvas");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Register a font that supports Unicode (like emojis and special characters)
+registerFont(path.join(__dirname, "fonts", "NotoSans-Regular.ttf"), { family: "NotoSans" });
 
 // Wrap text helper
 function wrapText(ctx, text, maxWidth) {
@@ -36,14 +40,7 @@ function drawCircle(ctx, x, y, radius) {
 
 app.get("/welcome", async (req, res) => {
   try {
-    const {
-      background,
-      user_avatar,
-      username = "Unknown User",
-      server = "Server",
-      description = "",
-      borderColor = "#1E90FF"
-    } = req.query;
+    const { background, user_avatar, username = "Unknown User", server = "Server", description = "", borderColor = "#1E90FF" } = req.query;
 
     if (!background || !user_avatar) {
       return res.status(400).json({ error: "Missing required query params: background, user_avatar" });
@@ -90,19 +87,19 @@ app.get("/welcome", async (req, res) => {
 
     // Username
     ctx.fillStyle = "#ffffff";
-    ctx.font = "64px Arial"; // <-- Use Arial instead of Sans-serif
+    ctx.font = "64px NotoSans";
     let displayUsername = username.length > 28 ? username.slice(0, 25) + "..." : username;
     ctx.fillText(displayUsername, textX, curY);
     curY += 80;
 
     // Server name
-    ctx.font = "32px Arial"; // <-- Use Arial
+    ctx.font = "32px NotoSans";
     let displayServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
     ctx.fillText(`in ${displayServer}`, textX, curY);
     curY += 50;
 
     // Description
-    ctx.font = "28px Arial"; // <-- Use Arial
+    ctx.font = "28px NotoSans";
     const lines = wrapText(ctx, description, WIDTH - textX - 60);
     lines.forEach(line => {
       ctx.fillText(line, textX, curY);
@@ -111,15 +108,11 @@ app.get("/welcome", async (req, res) => {
 
     // Output image
     res.setHeader("Content-Type", "image/png");
-    const stream = canvas.createPNGStream();
-    stream.pipe(res);
+    canvas.createPNGStream().pipe(res);
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      error: "Failed to generate welcome card",
-      details: String(err.message || err)
-    });
+    res.status(500).json({ error: "Failed to generate welcome card", details: String(err.message || err) });
   }
 });
 
