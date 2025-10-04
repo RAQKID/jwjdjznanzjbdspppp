@@ -1,142 +1,56 @@
 const express = require('express');
-const Jimp = require('jimp');
 const axios = require('axios');
+
+// Build Jimp with plugins
+const jimp = require('@jimp/custom');
+const jimpTypes = require('@jimp/types');
+const jimpPrint = require('@jimp/plugin-print');
+
+const Jimp = jimp({
+  types: [jimpTypes],
+  plugins: [jimpPrint]
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Helper: download image into Jimp via axios
 async function loadImageFromUrl(url) {
   const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
   return await Jimp.read(Buffer.from(response.data));
 }
 
-function createCircleMask(size) {
-  const mask = new Jimp(size, size, 0x00000000);
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      if (dx * dx + dy * dy <= r * r) {
-        mask.setPixelColor(0xffffffff, x, y);
-      }
-    }
-  }
-  return mask;
-}
-
-function wrapText(text, maxCharsPerLine = 40) {
-  if (!text) return '';
-  const words = text.split(/\s+/);
-  const lines = [];
-  let cur = '';
-  for (const w of words) {
-    if ((cur + ' ' + w).trim().length <= maxCharsPerLine) {
-      cur = (cur + ' ' + w).trim();
-    } else {
-      lines.push(cur);
-      cur = w;
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.join('\n');
-}
-
 app.get('/welcome', async (req, res) => {
   try {
-    const backgroundUrl = req.query.background || req.query.bg;
-    const avatarUrl = req.query.user_avatar || req.query.avatar;
+    const backgroundUrl = req.query.background;
+    const avatarUrl = req.query.avatar || req.query.user_avatar;
     const username = req.query.username || 'Unknown User';
-    const serverName = req.query.server || 'Server';
-    const descriptionRaw = req.query.description || '';
-    const borderColorParam = req.query.borderColor || '#1E90FF';
 
     if (!backgroundUrl || !avatarUrl) {
-      return res.status(400).json({ error: 'Missing required query params: background and user_avatar' });
+      return res.status(400).json({ error: 'Missing required query params: background and avatar.' });
     }
 
-    const WIDTH = 1200;
-    const HEIGHT = 450;
+    const bg = await loadImageFromUrl(backgroundUrl);
+    const avatar = await loadImageFromUrl(avatarUrl);
 
-    const [bgImage, avatarImage] = await Promise.all([
-      loadImageFromUrl(backgroundUrl),
-      loadImageFromUrl(avatarUrl)
-    ]);
+    const WIDTH = 800;
+    const HEIGHT = 300;
 
-    bgImage.cover(WIDTH, HEIGHT);
+    bg.cover(WIDTH, HEIGHT);
 
     const base = new Jimp(WIDTH, HEIGHT);
-    base.composite(bgImage, 0, 0);
+    base.composite(bg, 0, 0);
 
-    const overlay = new Jimp(WIDTH, HEIGHT, 0x00000080);
-    base.composite(overlay, 0, 0);
+    // Load plugin fonts
+    const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
 
-    const AV_SIZE = 260;
-    avatarImage.cover(AV_SIZE, AV_SIZE);
-    const mask = createCircleMask(AV_SIZE);
-    avatarImage.mask(mask, 0, 0);
-
-    // Border circle
-    const border = new Jimp(AV_SIZE + 12, AV_SIZE + 12, 0x00000000);
-    const bSize = AV_SIZE + 12;
-    const bcx = bSize / 2;
-    const bcy = bSize / 2;
-    const br = bSize / 2;
-    const borderColor = Jimp.cssColorToHex(borderColorParam);
-
-    for (let y = 0; y < bSize; y++) {
-      for (let x = 0; x < bSize; x++) {
-        const dx = x - bcx;
-        const dy = y - bcy;
-        if (dx * dx + dy * dy <= br * br) {
-          border.setPixelColor(borderColor, x, y);
-        }
-      }
-    }
-
-    const avatarX = 60;
-    const avatarY = Math.round((HEIGHT - AV_SIZE) / 2);
-    base.composite(border, avatarX - 6, avatarY - 6);
-    base.composite(avatarImage, avatarX, avatarY);
-
-    // Built-in fonts (work in 1.6.0)
-    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
-    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
-
-    const textX = avatarX + AV_SIZE + 40;
-    const usernameY = avatarY + 10;
-
-    let safeUsername = username.length > 28 ? username.slice(0, 25) + '...' : username;
-    base.print(fontTitle, textX, usernameY, {
-      text: safeUsername,
-      alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT,
-      alignmentY: Jimp.VERTICAL_ALIGN_TOP
-    }, WIDTH - textX - 60, 100);
-
-    const serverY = usernameY + 80;
-    let safeServer = serverName.length > 30 ? serverName.slice(0, 27) + '...' : serverName;
-    base.print(fontSub, textX, serverY, {
-      text: `in ${safeServer}`,
-      alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT,
-      alignmentY: Jimp.VERTICAL_ALIGN_TOP
-    }, WIDTH - textX - 60, 80);
-
-    const descY = serverY + 56;
-    const desc = wrapText(descriptionRaw, 60);
-    base.print(fontSmall, textX, descY, {
-      text: desc,
-      alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT,
-      alignmentY: Jimp.VERTICAL_ALIGN_TOP
-    }, WIDTH - textX - 100, 160);
+    base.print(font, 20, 20, username);
 
     const buffer = await base.getBufferAsync(Jimp.MIME_PNG);
     res.set('Content-Type', 'image/png');
     res.send(buffer);
   } catch (err) {
-    console.error('Error generating welcome card:', err);
+    console.error(err);
     res.status(500).json({ error: 'Failed to generate welcome card', details: String(err.message || err) });
   }
 });
@@ -144,9 +58,6 @@ app.get('/welcome', async (req, res) => {
 // Export for Vercel
 module.exports = app;
 
-// Local dev
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`✅ Local server at http://localhost:${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`✅ Running at http://localhost:${PORT}`));
 }
