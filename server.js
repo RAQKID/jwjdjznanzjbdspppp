@@ -7,11 +7,12 @@ const PORT = process.env.PORT || 3000;
 
 // Wrap text helper
 function wrapText(ctx, text, maxWidth) {
+  if (!text) return [];
   const words = text.split(" ");
-  let lines = [];
+  const lines = [];
   let currentLine = "";
 
-  for (let word of words) {
+  for (const word of words) {
     const testLine = currentLine ? currentLine + " " + word : word;
     const metrics = ctx.measureText(testLine);
     if (metrics.width > maxWidth) {
@@ -28,7 +29,7 @@ function wrapText(ctx, text, maxWidth) {
 // Circular clipping for avatar
 function drawCircle(ctx, x, y, radius) {
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2, true);
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.closePath();
   ctx.clip();
 }
@@ -110,11 +111,15 @@ app.get("/welcome", async (req, res) => {
 
     // Output image
     res.setHeader("Content-Type", "image/png");
-    canvas.createPNGStream().pipe(res);
+    const stream = canvas.createPNGStream();
+    stream.pipe(res);
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to generate welcome card", details: String(err.message || err) });
+    res.status(500).json({
+      error: "Failed to generate welcome card",
+      details: String(err.message || err)
+    });
   }
 });
 
