@@ -1,25 +1,17 @@
 const express = require('express');
+const Jimp = require('jimp');
 const axios = require('axios');
-
-// ---- Jimp custom build ----
-const configure = require('@jimp/custom');
-const Jimp = configure({
-  plugins: [require('@jimp/plugin-print')],
-  types: [require('@jimp/types')]
-});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helper: download image into Jimp via axios
 async function loadImageFromUrl(url) {
   const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
   return await Jimp.read(Buffer.from(response.data));
 }
 
-// Create a circular mask Jimp image (opaque white circle, transparent outside)
 function createCircleMask(size) {
-  const mask = new Jimp(size, size, 0x00000000); // transparent
+  const mask = new Jimp(size, size, 0x00000000);
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2;
@@ -28,14 +20,13 @@ function createCircleMask(size) {
       const dx = x - cx;
       const dy = y - cy;
       if (dx * dx + dy * dy <= r * r) {
-        mask.setPixelColor(0xffffffff, x, y); // solid white
+        mask.setPixelColor(0xffffffff, x, y);
       }
     }
   }
   return mask;
 }
 
-// Wrap text to prevent overflowing
 function wrapText(text, maxCharsPerLine = 40) {
   if (!text) return '';
   const words = text.split(/\s+/);
@@ -56,14 +47,14 @@ function wrapText(text, maxCharsPerLine = 40) {
 app.get('/welcome', async (req, res) => {
   try {
     const backgroundUrl = req.query.background || req.query.bg;
-    const avatarUrl = req.query['user avatar'] || req.query.user_avatar || req.query.avatar;
+    const avatarUrl = req.query.user_avatar || req.query.avatar;
     const username = req.query.username || 'Unknown User';
     const serverName = req.query.server || 'Server';
     const descriptionRaw = req.query.description || '';
     const borderColorParam = req.query.borderColor || '#1E90FF';
 
     if (!backgroundUrl || !avatarUrl) {
-      return res.status(400).json({ error: 'Missing required query params: background and user avatar (avatar).' });
+      return res.status(400).json({ error: 'Missing required query params: background and user_avatar' });
     }
 
     const WIDTH = 1200;
@@ -87,6 +78,7 @@ app.get('/welcome', async (req, res) => {
     const mask = createCircleMask(AV_SIZE);
     avatarImage.mask(mask, 0, 0);
 
+    // Border circle
     const border = new Jimp(AV_SIZE + 12, AV_SIZE + 12, 0x00000000);
     const bSize = AV_SIZE + 12;
     const bcx = bSize / 2;
@@ -109,13 +101,14 @@ app.get('/welcome', async (req, res) => {
     base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatarImage, avatarX, avatarY);
 
-    // Load fonts (now safe with @jimp/custom)
+    // Built-in fonts (work in 1.6.0)
     const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
     const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
 
     const textX = avatarX + AV_SIZE + 40;
     const usernameY = avatarY + 10;
+
     let safeUsername = username.length > 28 ? username.slice(0, 25) + '...' : username;
     base.print(fontTitle, textX, usernameY, {
       text: safeUsername,
@@ -143,17 +136,17 @@ app.get('/welcome', async (req, res) => {
     res.set('Content-Type', 'image/png');
     res.send(buffer);
   } catch (err) {
-    console.error('Error generating welcome card:', err.message || err);
+    console.error('Error generating welcome card:', err);
     res.status(500).json({ error: 'Failed to generate welcome card', details: String(err.message || err) });
   }
 });
 
-// ✅ Export app for Vercel
+// Export for Vercel
 module.exports = app;
 
-// ✅ Local dev (only runs if executed directly)
+// Local dev
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`✅ Local server at http://localhost:${PORT}`);
   });
-      }
+}
