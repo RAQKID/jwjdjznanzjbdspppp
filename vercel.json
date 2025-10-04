@@ -1,9 +1,12 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "server.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/server.js" }
-  ]
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "node_modules/@jimp/plugin-print/fonts/**"
+    }
+  }
 }
