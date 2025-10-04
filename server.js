@@ -1,11 +1,12 @@
+const path = require("path");
 const express = require("express");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Register a font (download OpenSans-Regular.ttf or any font into a 'fonts' folder)
-registerFont("./fonts/OpenSans-Regular.ttf", { family: "OpenSans" });
+// Correct font path
+registerFont(path.join(__dirname, "fonts/OpenSans-Regular.ttf"), { family: "OpenSans" });
 
 // Wrap text helper
 function wrapText(ctx, text, maxWidth) {
@@ -28,7 +29,6 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// Circular clipping for avatar
 function drawCircle(ctx, x, y, radius) {
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -38,90 +38,59 @@ function drawCircle(ctx, x, y, radius) {
 
 app.get("/welcome", async (req, res) => {
   try {
-    const {
-      background,
-      user_avatar,
-      username = "Unknown User",
-      server = "Server",
-      description = "",
-      borderColor = "#1E90FF"
-    } = req.query;
-
-    if (!background || !user_avatar) {
-      return res.status(400).json({ error: "Missing required query params: background, user_avatar" });
-    }
+    const { background, user_avatar, username="Unknown User", server="Server", description="", borderColor="#1E90FF" } = req.query;
+    if (!background || !user_avatar) return res.status(400).json({ error: "Missing background or user_avatar" });
 
     const WIDTH = 1200;
     const HEIGHT = 450;
     const AV_SIZE = 260;
 
-    // Load images
     const [bgImage, avatarImage] = await Promise.all([
       loadImage(background),
       loadImage(user_avatar)
     ]);
 
-    // Create canvas
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    // Draw background
     ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
 
-    // Dark overlay
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Draw avatar border
     const avatarX = 60;
-    const avatarY = HEIGHT / 2 - AV_SIZE / 2;
+    const avatarY = HEIGHT/2 - AV_SIZE/2;
     ctx.fillStyle = borderColor;
     ctx.beginPath();
-    ctx.arc(avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2 + 6, 0, Math.PI * 2);
+    ctx.arc(avatarX+AV_SIZE/2, avatarY+AV_SIZE/2, AV_SIZE/2+6, 0, Math.PI*2);
     ctx.fill();
 
-    // Draw circular avatar
     ctx.save();
-    drawCircle(ctx, avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2);
+    drawCircle(ctx, avatarX+AV_SIZE/2, avatarY+AV_SIZE/2, AV_SIZE/2);
     ctx.drawImage(avatarImage, avatarX, avatarY, AV_SIZE, AV_SIZE);
     ctx.restore();
 
-    // Text styles
     const textX = avatarX + AV_SIZE + 40;
     let curY = avatarY + 10;
 
-    // Username
     ctx.fillStyle = "#ffffff";
     ctx.font = "64px OpenSans";
-    const displayUsername = username.length > 28 ? username.slice(0, 25) + "..." : username;
-    ctx.fillText(displayUsername, textX, curY);
+    ctx.fillText(username.length>28?username.slice(0,25)+"...":username, textX, curY);
     curY += 80;
 
-    // Server name
     ctx.font = "32px OpenSans";
-    const displayServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
-    ctx.fillText(`in ${displayServer}`, textX, curY);
+    ctx.fillText(server.length>30?server.slice(0,27)+"...":server, textX, curY);
     curY += 50;
 
-    // Description
     ctx.font = "28px OpenSans";
-    const lines = wrapText(ctx, description, WIDTH - textX - 60);
-    lines.forEach(line => {
-      ctx.fillText(line, textX, curY);
-      curY += 36;
-    });
+    wrapText(ctx, description, WIDTH-textX-60).forEach(line => { ctx.fillText(line, textX, curY); curY+=36; });
 
-    // Output image
     res.setHeader("Content-Type", "image/png");
-    const buffer = canvas.toBuffer("image/png");
-    res.send(buffer);
+    res.send(canvas.toBuffer("image/png"));
 
-  } catch (err) {
+  } catch(err) {
     console.error(err);
-    res.status(500).json({
-      error: "Failed to generate welcome card",
-      details: String(err.message || err)
-    });
+    res.status(500).json({ error:"Failed to generate welcome card", details: String(err.message || err) });
   }
 });
 
