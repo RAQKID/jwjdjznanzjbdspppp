@@ -1,17 +1,6 @@
 const express = require("express");
 const axios = require("axios");
-
-// Jimp custom with all plugins
-const jimp = require("@jimp/custom");
-const jimpTypes = require("@jimp/types");
-const jimpPlugins = require("@jimp/plugins");
-const Jimp = jimp({
-  types: [jimpTypes],
-  plugins: [jimpPlugins],
-});
-
-// Import normal Jimp just for fonts (fix ENOENT issue)
-const JimpFonts = require("jimp");
+const Jimp = require("jimp");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -63,7 +52,7 @@ app.get("/welcome", async (req, res) => {
     const bg = await loadImageFromUrl(background);
     const avatar = await loadImageFromUrl(user_avatar);
 
-    bg.resize(WIDTH, HEIGHT);
+    bg.cover(WIDTH, HEIGHT);
 
     const base = new Jimp(WIDTH, HEIGHT);
     base.composite(bg, 0, 0);
@@ -73,42 +62,40 @@ app.get("/welcome", async (req, res) => {
 
     const AV_SIZE = 260;
     avatar.cover(AV_SIZE, AV_SIZE);
+
+    // Circle mask
     const mask = new Jimp(AV_SIZE, AV_SIZE, 0x00000000);
     mask.circle();
     avatar.mask(mask, 0, 0);
 
+    // Border circle
     const border = new Jimp(AV_SIZE + 12, AV_SIZE + 12, 0x00000000);
-    const bSize = AV_SIZE + 12;
-    const bcx = bSize / 2;
-    const bcy = bSize / 2;
-    const br = bSize / 2;
     const borderHex = Jimp.cssColorToHex(borderColor);
-    for (let y = 0; y < bSize; y++) {
-      for (let x = 0; x < bSize; x++) {
-        const dx = x - bcx;
-        const dy = y - bcy;
-        if (dx * dx + dy * dy <= br * br) {
-          border.setPixelColor(borderHex, x, y);
-        }
+    border.circle().scan(0, 0, border.bitmap.width, border.bitmap.height, (x, y, idx) => {
+      const dx = x - border.bitmap.width / 2;
+      const dy = y - border.bitmap.height / 2;
+      const r = border.bitmap.width / 2;
+      if (dx * dx + dy * dy <= r * r) {
+        border.bitmap.data.writeUInt32BE(borderHex, idx);
       }
-    }
+    });
 
     const avatarX = 60;
     const avatarY = Math.round((HEIGHT - AV_SIZE) / 2);
     base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatar, avatarX, avatarY);
 
+    // Fonts (built-in, no ENOENT issues)
     const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
     const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
     const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
-    
+
     const textX = avatarX + AV_SIZE + 40;
     const usernameY = avatarY + 10;
     const serverY = usernameY + 80;
     const descY = serverY + 56;
 
-    let safeUsername =
-      username.length > 28 ? username.slice(0, 25) + "..." : username;
+    let safeUsername = username.length > 28 ? username.slice(0, 25) + "..." : username;
     base.print(fontTitle, textX, usernameY, safeUsername, WIDTH - textX - 60);
 
     let safeServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
