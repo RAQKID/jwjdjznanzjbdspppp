@@ -7,10 +7,8 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@jimp/custom": "^0.22.12",
-    "@jimp/types": "^1.6.0",
-    "@jimp/plugin-print": "^1.6.0",
     "axios": "^1.5.0",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "jimp": "1.6.0"
   }
 }
