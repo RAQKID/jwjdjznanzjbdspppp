@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "server.js": {
-      "runtime": "nodejs20.x",
-      "includeFiles": "node_modules/@jimp/plugin-print/fonts/**"
-    }
-  },
   "builds": [
     {
       "src": "server.js",
