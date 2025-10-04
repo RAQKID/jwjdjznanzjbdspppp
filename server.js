@@ -6,10 +6,9 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Register a font that supports Unicode (like emojis and special characters)
+// Register a font that supports Unicode (Emoji & special characters)
 registerFont(path.join(__dirname, "fonts", "NotoSans-Regular.ttf"), { family: "NotoSans" });
 
-// Wrap text helper
 function wrapText(ctx, text, maxWidth) {
   if (!text) return [];
   const words = text.split(" ");
@@ -30,7 +29,6 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// Circular clipping for avatar
 function drawCircle(ctx, x, y, radius) {
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -50,24 +48,21 @@ app.get("/welcome", async (req, res) => {
     const HEIGHT = 450;
     const AV_SIZE = 260;
 
-    // Load images
     const [bgImage, avatarImage] = await Promise.all([
       loadImage(background),
       loadImage(user_avatar)
     ]);
 
-    // Create canvas
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    // Draw background
     ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
 
     // Dark overlay
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Draw avatar border
+    // Avatar border
     const avatarX = 60;
     const avatarY = HEIGHT / 2 - AV_SIZE / 2;
     ctx.fillStyle = borderColor;
@@ -75,13 +70,12 @@ app.get("/welcome", async (req, res) => {
     ctx.arc(avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2 + 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw circular avatar
+    // Circular avatar
     ctx.save();
     drawCircle(ctx, avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2);
     ctx.drawImage(avatarImage, avatarX, avatarY, AV_SIZE, AV_SIZE);
     ctx.restore();
 
-    // Text styles
     const textX = avatarX + AV_SIZE + 40;
     let curY = avatarY + 10;
 
@@ -106,7 +100,6 @@ app.get("/welcome", async (req, res) => {
       curY += 36;
     });
 
-    // Output image
     res.setHeader("Content-Type", "image/png");
     canvas.createPNGStream().pipe(res);
 
