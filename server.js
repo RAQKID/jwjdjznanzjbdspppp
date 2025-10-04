@@ -1,6 +1,12 @@
 const express = require('express');
-const Jimp = require('jimp');
 const axios = require('axios');
+
+// ---- Jimp custom build ----
+const configure = require('@jimp/custom');
+const Jimp = configure({
+  plugins: [require('@jimp/plugin-print')],
+  types: [require('@jimp/types')]
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -103,9 +109,10 @@ app.get('/welcome', async (req, res) => {
     base.composite(border, avatarX - 6, avatarY - 6);
     base.composite(avatarImage, avatarX, avatarY);
 
-    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
-    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+    // Load fonts (now safe with @jimp/custom)
+    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
+    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
 
     const textX = avatarX + AV_SIZE + 40;
     const usernameY = avatarY + 10;
@@ -149,4 +156,4 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`✅ Local server at http://localhost:${PORT}`);
   });
-}
+      }
