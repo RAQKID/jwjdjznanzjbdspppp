@@ -1,50 +1,36 @@
 const express = require("express");
 const axios = require("axios");
-const Jimp = require("jimp"); // only Jimp 0.22.1
+const { createCanvas, loadImage } = require("canvas");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Load image from URL
-async function loadImageFromUrl(url) {
-  const response = await axios.get(url, { responseType: "arraybuffer" });
-  return await Jimp.read(Buffer.from(response.data));
-}
+// Wrap text helper
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(" ");
+  let lines = [];
+  let currentLine = "";
 
-// Wrap text
-function wrapText(text, maxCharsPerLine = 40) {
-  if (!text) return "";
-  const words = text.split(/\s+/);
-  const lines = [];
-  let cur = "";
-  for (const w of words) {
-    if ((cur + " " + w).trim().length <= maxCharsPerLine) {
-      cur = (cur + " " + w).trim();
+  for (let word of words) {
+    const testLine = currentLine ? currentLine + " " + word : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth) {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
     } else {
-      lines.push(cur);
-      cur = w;
+      currentLine = testLine;
     }
   }
-  if (cur) lines.push(cur);
-  return lines.join("\n");
+  if (currentLine) lines.push(currentLine);
+  return lines;
 }
 
-// Create circular mask manually
-function createCircleMask(size) {
-  const mask = new Jimp(size, size, 0x00000000);
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      if (dx * dx + dy * dy <= r * r) {
-        mask.setPixelColor(0xffffffff, x, y);
-      }
-    }
-  }
-  return mask;
+// Circular clipping for avatar
+function drawCircle(ctx, x, y, radius) {
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2, true);
+  ctx.closePath();
+  ctx.clip();
 }
 
 app.get("/welcome", async (req, res) => {
@@ -53,92 +39,83 @@ app.get("/welcome", async (req, res) => {
       background,
       user_avatar,
       username = "Unknown User",
-      server = "My Server",
-      description = "Welcome!",
-      borderColor = "#1E90FF",
+      server = "Server",
+      description = "",
+      borderColor = "#1E90FF"
     } = req.query;
 
     if (!background || !user_avatar) {
-      return res.status(400).json({
-        error: "Missing required query params: background, user_avatar",
-      });
+      return res.status(400).json({ error: "Missing required query params: background, user_avatar" });
     }
 
     const WIDTH = 1200;
     const HEIGHT = 450;
-
-    const bg = await loadImageFromUrl(background);
-    const avatar = await loadImageFromUrl(user_avatar);
-
-    bg.cover(WIDTH, HEIGHT); // resize background
-
-    const base = new Jimp(WIDTH, HEIGHT);
-    base.composite(bg, 0, 0);
-
-    const overlay = new Jimp(WIDTH, HEIGHT, 0x00000080);
-    base.composite(overlay, 0, 0);
-
     const AV_SIZE = 260;
-    avatar.cover(AV_SIZE, AV_SIZE);
-    const mask = createCircleMask(AV_SIZE);
-    avatar.mask(mask, 0, 0);
 
-    const border = new Jimp(AV_SIZE + 12, AV_SIZE + 12, 0x00000000);
-    const bSize = AV_SIZE + 12;
-    const bcx = bSize / 2;
-    const bcy = bSize / 2;
-    const br = bSize / 2;
-    const borderHex = Jimp.cssColorToHex(borderColor);
-    for (let y = 0; y < bSize; y++) {
-      for (let x = 0; x < bSize; x++) {
-        const dx = x - bcx;
-        const dy = y - bcy;
-        if (dx * dx + dy * dy <= br * br) {
-          border.setPixelColor(borderHex, x, y);
-        }
-      }
-    }
+    // Load images
+    const [bgImage, avatarImage] = await Promise.all([
+      loadImage(background),
+      loadImage(user_avatar)
+    ]);
 
+    // Create canvas
+    const canvas = createCanvas(WIDTH, HEIGHT);
+    const ctx = canvas.getContext("2d");
+
+    // Draw background
+    ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
+
+    // Dark overlay
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // Draw avatar border
     const avatarX = 60;
-    const avatarY = Math.round((HEIGHT - AV_SIZE) / 2);
-    base.composite(border, avatarX - 6, avatarY - 6);
-    base.composite(avatar, avatarX, avatarY);
+    const avatarY = HEIGHT / 2 - AV_SIZE / 2;
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    ctx.arc(avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2 + 6, 0, Math.PI * 2);
+    ctx.fill();
 
-    const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
-    const fontSub   = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    const fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+    // Draw circular avatar
+    ctx.save();
+    drawCircle(ctx, avatarX + AV_SIZE / 2, avatarY + AV_SIZE / 2, AV_SIZE / 2);
+    ctx.drawImage(avatarImage, avatarX, avatarY, AV_SIZE, AV_SIZE);
+    ctx.restore();
 
+    // Text styles
     const textX = avatarX + AV_SIZE + 40;
-    const usernameY = avatarY + 10;
-    const serverY = usernameY + 80;
-    const descY = serverY + 56;
+    let curY = avatarY + 10;
 
-    const safeUsername =
-      username.length > 28 ? username.slice(0, 25) + "..." : username;
-    base.print(fontTitle, textX, usernameY, safeUsername, WIDTH - textX - 60);
+    // Username
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "64px Sans-serif";
+    let displayUsername = username.length > 28 ? username.slice(0, 25) + "..." : username;
+    ctx.fillText(displayUsername, textX, curY);
+    curY += 80;
 
-    const safeServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
-    base.print(fontSub, textX, serverY, `in ${safeServer}`, WIDTH - textX - 60);
+    // Server name
+    ctx.font = "32px Sans-serif";
+    let displayServer = server.length > 30 ? server.slice(0, 27) + "..." : server;
+    ctx.fillText(`in ${displayServer}`, textX, curY);
+    curY += 50;
 
-    const wrappedDesc = wrapText(description, 60);
-    base.print(fontSmall, textX, descY, wrappedDesc, WIDTH - textX - 100);
+    // Description
+    ctx.font = "28px Sans-serif";
+    const lines = wrapText(ctx, description, WIDTH - textX - 60);
+    lines.forEach(line => {
+      ctx.fillText(line, textX, curY);
+      curY += 36;
+    });
 
-    const buffer = await base.getBufferAsync(Jimp.MIME_PNG);
-    res.set("Content-Type", "image/png");
-    res.send(buffer);
+    // Output image
+    res.setHeader("Content-Type", "image/png");
+    canvas.createPNGStream().pipe(res);
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      error: "Failed to generate welcome card",
-      details: String(err.message || err),
-    });
+    res.status(500).json({ error: "Failed to generate welcome card", details: String(err.message || err) });
   }
 });
 
-module.exports = app;
-
-if (require.main === module) {
-  app.listen(PORT, () =>
-    console.log(`✅ Server running on http://localhost:${PORT}`)
-  );
-    }
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
